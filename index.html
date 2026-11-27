@@ -2044,7 +2044,6 @@ body:has(#arcade:not([hidden]))::after{display:none}
 .st-tag{opacity:1!important}
 .sp-tip{margin:0;color:#FFC861;font-size:.85rem}
 #r-field .fish{grid-template-rows:auto auto;align-content:center}
-#r-field .fish .fish-hint{display:block;font:700 .62rem/1 var(--ui);color:#FFF6DC;-webkit-text-stroke:3px #2A0C08;paint-order:stroke fill;margin-top:2px;opacity:.9}
 
 /* first-time student fixes, part 2 */
 .more-opts{margin:0 0 24px}
@@ -2096,6 +2095,13 @@ body:has(#arcade:not([hidden]))::after{display:none}
 .theme-note{margin:4px 0 16px;font-size:.85rem}
 .theme-btn .ico{width:17px;height:17px}
 .theme-btn{margin-right:6px}
+/* the omikuji paper stays light in dark mode, so keep light-theme ink on it */
+#game .stage.sb.omi{--ink:#1B2950;--ink-soft:#56627F;--ai:#24407A;--ai-ink:#FFFFFF;--line:#C9D3DA;--edge:#A9B6C3;--surface:#F4F6F5;--paper:#E4EAEC;--ok:#2F7352;--bad:#B8233F;--shu:#C42A50;--shu-fill:#C42A50;--shu-soft:#F5DCE2;--gold:#B9861A;--kin:#B9861A;--hi:#E3AE32;--hi-ink:#2A1C00;--hi-deep:#B9861A;--press:color-mix(in srgb,#24407A 60%,#000);--stitch:rgba(27,41,80,.22);color:var(--ink)}
+.vs-h{font-size:1rem;margin:14px 0 2px}
+.voice-seg{margin-bottom:12px}
+.sb .sb-listen{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:11px 16px;border-radius:10px;font:700 1rem/1 var(--ui);cursor:pointer;background:#FFF6DC;color:#2A0C08;border:2px solid #2A0C08;box-shadow:2px 2px 0 #2A0C08}
+.sb .sb-listen:active{transform:translate(1px,1px);box-shadow:1px 1px 0 #2A0C08}
+.sb .sb-listen[hidden]{display:none}
 /* ---------- Results ---------- */
 #game .result{position:relative;overflow:hidden}
 .result .sum-hero{display:flex;align-items:center;gap:14px}
@@ -2502,6 +2508,12 @@ body:has(#arcade:not([hidden]))::after{display:none}
       <label class="toggle"><input type="checkbox" id="opt-sfx"> Sound effects</label>
       <label class="toggle"><input type="checkbox" id="opt-music"> Background music (koto in Learn, festival drums in the Arcade)</label>
     </div>
+    <h3 class="vs-h" id="vs-h">Voice speed</h3>
+    <div class="theme-seg voice-seg" role="radiogroup" aria-labelledby="vs-h">
+      <button class="opt" type="button" role="radio" data-vspeed="normal">Normal</button>
+      <button class="opt" type="button" role="radio" data-vspeed="slow">Slow</button>
+      <button class="opt" type="button" role="radio" data-vspeed="slower">Very slow</button>
+    </div>
     <div class="native-opts" id="native-opts" hidden>
       <h2>Phone</h2>
       <label class="toggle"><input type="checkbox" id="opt-haptics"> Vibration on right and wrong answers</label>
@@ -2775,6 +2787,26 @@ const ALL = []; const EXTRA = []; const BY_ID = {};
 const KEY = 'kana-practice-v1';
 function load(){ try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch(e){ return {}; } }
 const saved = load();
+const VOICE_KEY = 'kana-voice-speed-v1', VOICE_SPEEDS = { normal: 1, slow: .85, slower: .7 };
+function voiceSpeedName(){ try { const v = localStorage.getItem(VOICE_KEY); if (v && VOICE_SPEEDS[v]) return v; } catch (e) {} return 'slow'; }
+const voiceSpeed = () => VOICE_SPEEDS[voiceSpeedName()];
+(() => {
+  // Every HTML audio element in the app is a voice clip (sound effects and music use Web Audio).
+  const seen = new WeakSet(), MP = HTMLMediaElement.prototype, play0 = MP.play;
+  MP.play = function(){
+    try {
+      if (!seen.has(this)) { seen.add(this); this.preservesPitch = true; this.webkitPreservesPitch = true; this.playbackRate = Math.max(.6, (this.playbackRate || 1) * voiceSpeed()); }
+    } catch (e) {}
+    return play0.apply(this, arguments);
+  };
+  if (window.SpeechSynthesis && SpeechSynthesis.prototype.speak) {
+    const say0 = SpeechSynthesis.prototype.speak;
+    SpeechSynthesis.prototype.speak = function(u){
+      try { if (u && !u.__vs) { u.__vs = 1; u.rate = Math.max(.5, (u.rate || 1) * voiceSpeed()); } } catch (e) {}
+      return say0.apply(this, arguments);
+    };
+  }
+})();
 const settings = Object.assign({ script:'h', rows:['a','ka','sa','ta','na'], mode:'pick', len:20, voice:true, font:'klee' }, saved.settings || {});
 settings.rows = settings.rows.filter(id => ROWS.some(r => r.id === id));
 let progress = saved.progress || {};
@@ -5200,7 +5232,7 @@ function rainGame(id){
     const it = pickWeighted(free.length ? free : items);
     const v = VARIANTS[Math.floor(Math.random() * VARIANTS.length)];
     const d = document.createElement('div'); d.className = 'fish f-' + v + ([...it.kana].length > 1 ? ' wide' : ''); d.style.setProperty('--spr', `url(${fishSprite(v)})`);
-    d.innerHTML = `<span>${it.kana}</span>${learner || missedIds.has(it.id) ? `<small class="fish-hint" lang="en">${it.r}</small>` : ''}`; if (isMix()) d.style.setProperty('--kana', pickFont().stack);
+    d.innerHTML = `<span>${it.kana}</span>`; if (isMix()) d.style.setProperty('--kana', pickFont().stack);
     d.style.animationDelay = (-Math.random()).toFixed(2) + 's';
     field.appendChild(d);
     const h = d.offsetHeight;
@@ -5573,10 +5605,10 @@ const WORDS_H = parseWords(`
 き:ki:tree:🌲 もり:mori:forest:🌳 うみ:umi:sea:🌊 つき:tsuki:moon:🌙 ほし:hoshi:star:⭐ ゆき:yuki:snow:❄️ かぜ:kaze:wind:🌬️ くるま:kuruma:car:🚗
 でんしゃ:densha:train:🚃 すし:sushi:sushi:🍣 ごはん:gohan:rice_or_a_meal:🍚 おちゃ:ocha:green_tea:🍵 にく:niku:meat:🍖 たまご:tamago:egg:🥚
 りんご:ringo:apple:🍎 いちご:ichigo:strawberry:🍓 さくら:sakura:cherry_blossom:🌸 ともだち:tomodachi:friend:🧑‍🤝‍🧑 せんせい:sensei:teacher:🧑‍🏫
-がっこう:gakkō:school:🏫 ありがとう:arigatō:thank_you:🙏 こんにちは:konnichiwa:hello:👋 おはよう:ohayō:good_morning:🌞 すき:suki:to_like:❤️
+がっこう:gakkō:school:🏫 ありがとう:arigatō:thank_you:🙏 こんにちは:konnichiwa:hello:😀 おはよう:ohayō:good_morning:🌅 すき:suki:to_like:❤️
 たべる:taberu:to_eat:🍽️ のむ:nomu:to_drink:🥤 みる:miru:to_see:👀 ねる:neru:to_sleep:😴 かさ:kasa:umbrella:☂️ くつ:kutsu:shoes:👟 ほん:hon:book:📕
 かみ:kami:paper:📄 えき:eki:station:🚉 まち:machi:town:🏘️ しごと:shigoto:work:💼 なつ:natsu:summer:☀️ ふゆ:fuyu:winter:⛄ はる:haru:spring:🌷
-あき:aki:autumn:🍁 きょう:kyō:today:📅 あした:ashita:tomorrow:🌅 ひこうき:hikōki:airplane:✈️ でんわ:denwa:telephone:📞 じかん:jikan:time:⏰
+あき:aki:autumn:🍁 きょう:kyō:today:📅 あした:ashita:tomorrow:📆 ひこうき:hikōki:airplane:✈️ でんわ:denwa:telephone:📞 じかん:jikan:time:⏰
 あか:aka:red:🟥 あお:ao:blue:🟦 しろ:shiro:white:⬜ くろ:kuro:black:⬛ いえ:ie:house:🏠 かお:kao:face:😊 はし:hashi:chopsticks:🥢 いす:isu:chair:🪑
 うし:ushi:cow:🐄 うま:uma:horse:🐴 とり:tori:bird:🐦 さる:saru:monkey:🐒 くま:kuma:bear:🐻 かに:kani:crab:🦀 たこ:tako:octopus:🐙 いか:ika:squid:🦑
 えび:ebi:shrimp:🦐 かめ:kame:turtle:🐢 へび:hebi:snake:🐍 うさぎ:usagi:rabbit:🐰 きつね:kitsune:fox:🦊 ぶた:buta:pig:🐷 ひつじ:hitsuji:sheep:🐑
@@ -5584,14 +5616,14 @@ const WORDS_H = parseWords(`
 にじ:niji:rainbow:🌈 かみなり:kaminari:thunder:⚡ たいよう:taiyō:sun:🌞 しま:shima:island:🏝️ くさ:kusa:grass:🌿 たね:tane:seed:🌱 はっぱ:happa:leaf:🍃
 もも:momo:peach:🍑 みかん:mikan:mandarin_orange:🍊 ぶどう:budō:grapes:🍇 すいか:suika:watermelon:🍉 なし:nashi:pear:🍐 くり:kuri:chestnut:🌰
 こめ:kome:uncooked_rice:🌾 しお:shio:salt:🧂 うどん:udon:udon_noodles:🍜 そば:soba:soba_noodles:🥢 おにぎり:onigiri:rice_ball:🍙 べんとう:bentō:boxed_lunch:🍱
-だんご:dango:sweet_dumplings:🍡 おかし:okashi:sweets:🍬 まど:mado:window:🪟 かぎ:kagi:key:🔑 かばん:kaban:bag:👜 とけい:tokei:clock:🕰️ めがね:megane:glasses:👓
+だんご:dango:sweet_dumplings:🍡 おかし:okashi:sweets:🍭 まど:mado:window:🪟 かぎ:kagi:key:🔑 かばん:kaban:bag:👜 とけい:tokei:clock:🕰️ めがね:megane:glasses:👓
 ぼうし:bōshi:hat:🧢 てがみ:tegami:letter:✉️ えんぴつ:enpitsu:pencil:✏️ はさみ:hasami:scissors:✂️ ふとん:futon:futon_bed:🛏️ かがみ:kagami:mirror:🪞
 やさい:yasai:vegetables:🥬 たまねぎ:tamanegi:onion:🧅 にんじん:ninjin:carrot:🥕 じてんしゃ:jitensha:bicycle:🚲 ちかてつ:chikatetsu:subway:🚇
-しんかんせん:shinkansen:bullet_train:🚄 みち:michi:road:🛣️ びょういん:byōin:hospital:🏥 ぎんこう:ginkō:bank:🏦 こうえん:kōen:park:🎡 としょかん:toshokan:library:📚
+しんかんせん:shinkansen:bullet_train:🚄 みち:michi:road:🛣️ びょういん:byōin:hospital:🏥 ぎんこう:ginkō:bank:🏦 こうえん:kōen:park:⛲ としょかん:toshokan:library:📚
 ゆうびんきょく:yūbinkyoku:post_office:🏤 おとうさん:otōsan:father:👨 おかあさん:okāsan:mother:👩 あかちゃん:akachan:baby:👶 おじいさん:ojīsan:grandfather:👴
 おばあさん:obāsan:grandmother:👵 こども:kodomo:child:🧒 はなび:hanabi:fireworks:🎆 まつり:matsuri:festival:🏮 じんじゃ:jinja:shrine:⛩️ おてら:otera:temple:🛕
 ゆかた:yukata:summer_kimono:👘 げんき:genki:energetic:💪 うれしい:ureshii:happy:😄 かなしい:kanashii:sad:😢 おいしい:oishii:delicious:😋 さむい:samui:cold:🥶
-あつい:atsui:hot:🥵 ねむい:nemui:sleepy:😪 おやすみ:oyasumi:good_night:🌛 さようなら:sayōnara:goodbye:🫡 いただきます:itadakimasu:let's_eat_(said_before_a_meal):🥢
+あつい:atsui:hot:🥵 ねむい:nemui:sleepy:😪 おやすみ:oyasumi:good_night:🌛 さようなら:sayōnara:goodbye:👋 いただきます:itadakimasu:let's_eat_(said_before_a_meal):🥢
 ごちそうさま:gochisōsama:thanks_for_the_meal:😌 すみません:sumimasen:excuse_me_/_sorry:🙇 おめでとう:omedetō:congratulations:🎊 しゃしん:shashin:photo:📸
 じしょ:jisho:dictionary:📖 しゅくだい:shukudai:homework:📝 りょうり:ryōri:cooking:🍳 ぎゅうにゅう:gyūnyū:milk:🥛 ちょうちょ:chōcho:butterfly:🦋 きんぎょ:kingyo:goldfish:🐠
 ひゃく:hyaku:hundred:💯 でんき:denki:electric_light:💡 はなみ:hanami:cherry_blossom_viewing:🧺 ゆきだるま:yukidaruma:snowman:☃️ かたつむり:katatsumuri:snail:🐌
@@ -5606,12 +5638,12 @@ const WORDS_H = parseWords(`
 まいにち:mainichi:every_day:🔁 いま:ima:now:⌛
 `);
 const WORDS_K = parseWords(`
-コーヒー:kōhī:coffee:☕ テレビ:terebi:television:📺 パン:pan:bread:🍞 カメラ:kamera:camera:📷 ホテル:hoteru:hotel:🏨 タクシー:takushī:taxi:🚕
-バス:basu:bus:🚌 アイス:aisu:ice_cream:🍦 ピザ:piza:pizza:🍕 ケーキ:kēki:cake:🍰 ゲーム:gēmu:game:🎮 メール:mēru:email:📧 ノート:nōto:notebook:📓 ペン:pen:pen:🖊️
+コーヒー:kōhī:coffee:☕ テレビ:terebi:television:🖥️ パン:pan:bread:🍞 カメラ:kamera:camera:📷 ホテル:hoteru:hotel:🏨 タクシー:takushī:taxi:🚕
+バス:basu:bus:🚌 アイス:aisu:ice_cream:🍦 ピザ:piza:pizza:🍕 ケーキ:kēki:cake:🎂 ゲーム:gēmu:game:🎮 メール:mēru:email:📧 ノート:nōto:notebook:📓 ペン:pen:pen:🖊️
 テスト:tesuto:test:📝 スマホ:sumaho:smartphone:📱 トイレ:toire:toilet:🚻 ジュース:jūsu:juice:🧃 ラーメン:rāmen:ramen:🍜 サッカー:sakkā:soccer:⚽
 ギター:gitā:guitar:🎸 ピアノ:piano:piano:🎹 アメリカ:amerika:America:🗽 カナダ:kanada:Canada:🍁 ドイツ:doitsu:Germany:🥨 ロボット:robotto:robot:🤖
 チーズ:chīzu:cheese:🧀 パソコン:pasokon:computer:💻 エレベーター:erebētā:elevator:🛗 ハンバーガー:hanbāgā:hamburger:🍔 シャツ:shatsu:shirt:👕
-ニュース:nyūsu:news:📰 パーティー:pātī:party:🎉 カフェ:kafe:café:🧁 ガム:gamu:chewing_gum:🫧 ハム:hamu:ham:🥓 ジャム:jamu:jam:🍯 ミルク:miruku:milk:🍼
+ニュース:nyūsu:news:📰 パーティー:pātī:party:🎉 カフェ:kafe:café:🍰 ガム:gamu:chewing_gum:🍬 ハム:hamu:ham:🥓 ジャム:jamu:jam:🍯 ミルク:miruku:milk:🍼
 ココア:kokoa:cocoa:🍫 バナナ:banana:banana:🍌 メロン:meron:melon:🍈 レモン:remon:lemon:🍋 トマト:tomato:tomato:🍅 キウイ:kiui:kiwi_fruit:🥝 オレンジ:orenji:orange:🍊
 パイナップル:painappuru:pineapple:🍍 サラダ:sarada:salad:🥗 スープ:sūpu:soup:🍲 カレー:karē:curry:🍛 ステーキ:sutēki:steak:🥩 ドーナツ:dōnatsu:doughnut:🍩
 クッキー:kukkī:cookie:🍪 チョコレート:chokorēto:chocolate:🍫 ポテト:poteto:fries:🍟 ホットドッグ:hottodoggu:hot_dog:🌭 サンドイッチ:sandoitchi:sandwich:🥪
@@ -5624,12 +5656,12 @@ const WORDS_K = parseWords(`
 プール:pūru:swimming_pool:🏊 フランス:furansu:France:🗼 イタリア:itaria:Italy:🍝 イギリス:igirisu:United_Kingdom:💂 ブラジル:burajiru:Brazil:🦜 オーストラリア:ōsutoraria:Australia:🦘
 エジプト:ejiputo:Egypt:🐪 パンダ:panda:panda:🐼 ライオン:raion:lion:🦁 ゴリラ:gorira:gorilla:🦍 ペンギン:pengin:penguin:🐧 コアラ:koara:koala:🐨 キリン:kirin:giraffe:🦒
 イルカ:iruka:dolphin:🐬 アイスクリーム:aisukurīmu:ice_cream_(full_name):🍨 クリスマス:kurisumasu:Christmas:🎄 プレゼント:purezento:present:🎁 ハロウィン:harowin:Halloween:🎃
-チケット:chiketto:ticket:🎫 ポスト:posuto:postbox:📮 コンピューター:konpyūtā:computer_(full_name):🖥️ シャワー:shawā:shower:🚿 タオル:taoru:towel:🧻 ナイフ:naifu:knife:🔪
-フォーク:fōku:fork:🍴 スプーン:supūn:spoon:🥄 ピンク:pinku:pink:🩷 ゼロ:zero:zero:0️⃣ ホテル:hoteru:hotel:🏨
+チケット:chiketto:ticket:🎫 ポスト:posuto:postbox:📮 コンピューター:konpyūtā:computer_(full_name):💻 シャワー:shawā:shower:🚿 タオル:taoru:towel:🛁 ナイフ:naifu:knife:🔪
+フォーク:fōku:fork:🍴 スプーン:supūn:spoon:🥄 ピンク:pinku:pink:🌸 ゼロ:zero:zero:0️⃣ ホテル:hoteru:hotel:🏨
 
-ベンチ:benchi:bench:🪑 スター:sutā:star:🌟 キャンプ:kyanpu:camping:🏕️ ジム:jimu:gym:🏋️ ヨガ:yoga:yoga:🧘 ダンス:dansu:dance:🕺 アニメ:anime:anime:🎞️
-マンガ:manga:manga_comics:🗯️ カード:kādo:card:💳 コイン:koin:coin:🪙 ソファ:sofa:sofa:🛋️ ランプ:ranpu:lamp:🪔 テント:tento:tent:⛺ リボン:ribon:ribbon:🎀
-ドラゴン:doragon:dragon:🐉 ユニコーン:yunikōn:unicorn:🦄 ピラミッド:piramiddo:pyramid:🔺 タコス:takosu:tacos:🌮 ワッフル:waffuru:waffle:🧇 パンケーキ:pankēki:pancakes:🥞
+ベンチ:benchi:bench:🪑 スター:sutā:star:🌟 キャンプ:kyanpu:camping:🏕️ ジム:jimu:gym:🏋️ ヨガ:yoga:yoga:🧘 ダンス:dansu:dance:🕺 アニメ:anime:anime:📺
+マンガ:manga:manga_comics:📚 カード:kādo:card:💳 コイン:koin:coin:🪙 ソファ:sofa:sofa:🛋️ ランプ:ranpu:lamp:🪔 テント:tento:tent:⛺ リボン:ribon:ribbon:🎀
+ドラゴン:doragon:dragon:🐉 ユニコーン:yunikōn:unicorn:🦄 ピラミッド:piramiddo:pyramid:🏜️ タコス:takosu:tacos:🌮 ワッフル:waffuru:waffle:🧇 パンケーキ:pankēki:pancakes:🥞
 アボカド:abokado:avocado:🥑 ブロッコリー:burokkorī:broccoli:🥦 ポップコーン:poppukōn:popcorn:🍿
 `).filter((w, i, a) => a.findIndex(x => x.w === w.w) === i);
 const WORDS_J = (() => { const seen = new Set(), out = []; Object.keys(KJ).forEach(k => KJ[k].ex.forEach(([w, kana, r, m]) => { if (seen.has(w) || seen.has(r)) return; seen.add(w); seen.add(r); out.push({ w, r, m, e: KPIC[k] || '', kana }); })); return out; })();
@@ -5872,7 +5904,7 @@ function sentenceGame(id){
       <div class="sb-tools"><button class="link" id="sb-hint">Show pattern</button><button class="link" id="sb-rom"></button><button class="link" id="sb-kanji"></button><span id="sb-furi-t"></span><button class="link" id="sb-clear">Clear</button></div>
       <p class="sb-pattern muted" id="sb-pattern" hidden></p>
       <div class="feedback" id="sb-fb" role="status" aria-live="polite"></div>
-      <div class="next-wrap"><button class="primary" id="sb-check" disabled>Check</button><button class="secondary" id="sb-next" hidden>Next</button></div>
+      <div class="next-wrap"><button class="primary" id="sb-check" disabled>Check</button><button class="sb-listen" id="sb-listen" type="button" hidden><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>Listen again</button><button class="primary" id="sb-next" hidden>Next</button></div>
       <p class="keys">Tap tiles to build the sentence. Tap a placed tile to remove it. Enter checks.</p>
     </div>`;
 
@@ -5961,7 +5993,7 @@ function sentenceGame(id){
     const pic = $('#sb-pic'); pic.textContent = s.e; pic.style.animation = 'none'; void pic.offsetWidth; pic.style.animation = '';
     $('#sb-pattern').hidden = true; $('#sb-pattern').textContent = 'Pattern: ' + (s.p || SENT_PATTERN[s.lv]);
     omiNew();
-    $('#sb-fb').innerHTML = ''; $('#sb-next').hidden = true; $('#sb-check').hidden = false;
+    $('#sb-fb').innerHTML = ''; $('#sb-next').hidden = true; $('#sb-listen').hidden = true; $('#sb-check').hidden = false;
     draw();
   }
   function breakdown(s){
@@ -5990,7 +6022,7 @@ function sentenceGame(id){
       strip.querySelectorAll('.tile').forEach((t, k) => t.style.setProperty('--d', (k * 60) + 'ms')); strip.classList.add('wave');
       $('#sb-fb').innerHTML = `<span class="yes">${tries === 0 ? 'Perfect! Great blessing, 大吉.' : 'Got it! Blessing, 吉.'}</span> <span class="gain">+${gain} XP</span>${breakdown(s)}`;
       omiLuck(tries === 0 ? '大吉' : '吉');
-      if (settings.voice) speak(s.t.map(t => t[0]).join(''));
+      if (settings.voice) sayLater();
       finishQ();
     } else {
       tries++; sfx('miss'); J.shake($('#sb-strip'), .7); J.flash('bad');
@@ -6004,13 +6036,16 @@ function sentenceGame(id){
         done = true; st.x++; st.s = 0; G.ss[s.id] = st; saveG();
         $('#sb-fb').innerHTML = `<span class="no">Bad luck, 凶.</span> Your slip is tied to the rack to leave the bad luck behind. Here is the answer; it will come back soon so you can try again.${breakdown(s)}`;
         omiLuck('凶');
-        if (settings.voice) speak(s.t.map(t => t[0]).join(''));
+        if (settings.voice) sayLater();
         finishQ();
       }
     }
     draw();
   }
+  function sayIt(){ const q = list[i - 1]; if (q) speak(q.t.map(t => t[0]).join(''), .75); }
+  function sayLater(){ const at = i; setTimeout(() => { if (alive && i === at + 1) sayIt(); }, 650); }
   function finishQ(){
+    $('#sb-listen').hidden = false;
     i++; $('#s-bar').style.width = (i / list.length * 100) + '%';
     $('#sb-check').hidden = true;
     const nx = $('#sb-next'); nx.hidden = false; nx.textContent = i >= list.length ? 'See results' : 'Next sentence'; nx.focus();
@@ -6023,6 +6058,7 @@ function sentenceGame(id){
   });
   $('#sb-check').addEventListener('click', check);
   $('#sb-next').addEventListener('click', render);
+  $('#sb-listen').addEventListener('click', () => { sfx('tap'); sayIt(); });
   $('#sb-clear').addEventListener('click', () => { if (done) return; placed = []; draw(); });
   $('#sb-hint').addEventListener('click', () => { $('#sb-pattern').hidden = !$('#sb-pattern').hidden; });
   $('#sb-rom').addEventListener('click', () => { settings.tileRomaji = !settings.tileRomaji; save(); romBtn(); });
@@ -7244,6 +7280,12 @@ $('#snd').addEventListener('click', e => { e.stopPropagation(); AudioSys.setMute
 $('#opt-sfx').addEventListener('change', e => { AudioSys.setMute(!e.target.checked); renderSoundUI(); sfx('tap'); });
 $('#opt-music').addEventListener('change', e => { AudioSys.setMusic(e.target.checked); renderSoundUI(); });
 renderSoundUI();
+function renderVoiceSpeed(){ const v = voiceSpeedName(); document.querySelectorAll('[data-vspeed]').forEach(b => { const on = b.dataset.vspeed === v; b.setAttribute('aria-checked', String(on)); b.classList.toggle('sel', on); }); }
+document.querySelectorAll('[data-vspeed]').forEach(b => b.addEventListener('click', () => {
+  try { localStorage.setItem(VOICE_KEY, b.dataset.vspeed); } catch (e) {}
+  renderVoiceSpeed(); speak('こんにちは');
+}));
+renderVoiceSpeed();
 
 // ===== Living scenes: real season + time of day =====
 const LKEY = 'kana-scene-v1';
