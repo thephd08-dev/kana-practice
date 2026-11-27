@@ -1556,7 +1556,10 @@ fieldset>legend~*{clear:both}
 .tlv.on{background:var(--ink)!important;color:var(--paper)!important}
 .tlv.on small{color:color-mix(in srgb,var(--paper) 75%,transparent)!important}
 .tlv.on b{color:var(--ink)}
-.toast{border:1.5px solid var(--ink)!important;border-radius:12px!important;box-shadow:3px 3px 0 var(--hard)!important;background:var(--surface)!important}
+.toast{border:1.5px solid var(--ink)!important;border-radius:12px!important;box-shadow:3px 3px 0 var(--hard)!important;background:var(--surface)!important;color:var(--ink)!important}
+:root[data-theme="dark"] .toast{background:#24345E!important;box-shadow:0 10px 30px rgba(0,0,0,.55)!important}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .toast{background:#24345E!important;box-shadow:0 10px 30px rgba(0,0,0,.55)!important}}
+@media (max-width:760px){.toasts{bottom:calc(84px + env(safe-area-inset-bottom,0px))}}
 
 /* Red Moon Ronin arcade machine (deliberately dark: a night courtyard under a red moon) */
 .m-ronin .marquee{background:#1a0d14;color:#e2474b}
